@@ -20,50 +20,69 @@ const formAddGame = document.querySelector('[data-js="add-game-form"]')
 const gamesList = document.querySelector('[data-js="games-list"]')
 const buttonUnsub = document.querySelector('[data-js="unsub"]')
 
-const unsubscribe = onSnapshot(collectionGames, querySnapshot => {
+const getFormattedDate = createdAt => 
+  new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(createdAt.toDate())
+
+const renderGamesList = querySnapshot => {
   if(!querySnapshot.metadata.hasPendingWrites) {
     const gamesLis = querySnapshot.docs.reduce((acc, doc) => {
-      const { title, developedBy, createdAt } = doc.data()
+      const [id, { title, developedBy, createdAt }] = [doc.id, doc.data()]
 
-      acc += `<li class="my-4" data-id ="${doc.id}">
+      return `${acc}<li class="my-4" data-id ="${id}">
       <h5>${title}</h5>
           
-      <ul>
+      <ul> 
         <li>Desenvolvido por ${developedBy}</li>
-        <li>Adicionado no banco em ${createdAt.toDate()}</li>
+        <li>Adicionado no banco em ${getFormattedDate(createdAt)}</li>
       </ul>
-      <button class="btn btn-danger btn-sm" data-remove="${doc.id}">Remover</button>
+      <button class="btn btn-danger btn-sm" data-remove="${id}">Remover</button>
     </li>`
-
-    return acc
   }, '')
 
   gamesList.innerHTML = gamesLis
   }
-})
+}
 
+const to = promise => promise
+  .then(result => [null, result])
+  .catch(error => [error])
 
-formAddGame.addEventListener('submit', e =>{
+const addGame = async e => {
   e.preventDefault()
-  
-  addDoc(collectionGames, {
+
+  const [ error, doc ] = await to(addDoc(collectionGames, {
     title : e.target.title.value,
     developedBy : e.target.developer.value,
     createdAt : serverTimestamp()
-  })
-  .then(doc => console.log("Documento criado com o Id", doc.id))
-  //.cath(console.log)
-})
-
-gamesList.addEventListener('click',e => {
-  const idRemoveButton = e.target.dataset.remove
+  }))
   
-  if(idRemoveButton){
-    deleteDoc(doc(db, 'games', idRemoveButton))
-      .then(() => console.log('Game removido'))
-      .catch(console.log)
-    
+  if(error){
+    return console.log(error)
   }
-})
+  
+  e.target.reset()
+  e.target.title.focus()
+  console.log("Documento criado com o Id", doc.id)
+}
 
+const deleteGame = async e => {
+  const idRemoveButton = e.target.dataset.remove
+
+  if(!idRemoveButton){
+    return 
+  }
+  
+  const [ error ] = await to(deleteDoc(doc(db, 'games', idRemoveButton)))
+
+  if(error){
+    return  console.log(error)
+  }
+
+  console.log('Game removido')
+}
+
+
+const unsubscribe = onSnapshot(collectionGames, renderGamesList)
+gamesList.addEventListener('click',deleteGame)
+formAddGame.addEventListener('submit', addGame)
 buttonUnsub.addEventListener('click',unsubscribe)
