@@ -1,5 +1,5 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.0.1/firebase-app.js'
-import { getFirestore, collection, getDocs, addDoc, serverTimestamp, doc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/9.0.1/firebase-firestore.js'
+import { getFirestore, collection, addDoc, serverTimestamp, doc, deleteDoc, onSnapshot } from 'https://www.gstatic.com/firebasejs/9.0.1/firebase-firestore.js'
 
 const firebaseConfig = {
   apiKey: 'AIzaSyCbCND3A5RFLNPa6tt05hp-j7oLJn-mA7E',
@@ -23,24 +23,53 @@ const buttonUnsub = document.querySelector('[data-js="unsub"]')
 const getFormattedDate = createdAt => 
   new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short'}).format(createdAt.toDate())
 
-const renderGamesList = querySnapshot => {
-  if(!querySnapshot.metadata.hasPendingWrites) {
-    const gamesLis = querySnapshot.docs.reduce((acc, doc) => {
-      const [id, { title, developedBy, createdAt }] = [doc.id, doc.data()]
+const sanitize = string => DOMPurify.sanitize(string)
 
-      return `${acc}<li class="my-4" data-id ="${id}">
-      <h5>${title}</h5>
-          
-      <ul> 
-        <li>Desenvolvido por ${developedBy}</li>
-        <li>Adicionado no banco em ${getFormattedDate(createdAt)}</li>
-      </ul>
-      <button class="btn btn-danger btn-sm" data-remove="${id}">Remover</button>
-    </li>`
-  }, '')
+const renderGame = docChange => {
+  const [id, { title, developedBy, createdAt }] = [docChange.doc.id, docChange.doc.data()]
 
-  gamesList.innerHTML = gamesLis
+  const liGame = document.createElement('li')
+  liGame.setAttribute('data-id', id)
+  liGame.setAttribute('class', 'my-4')
+
+  const h5 = document.createElement('h5')
+  h5.textContent = sanitize(title)
+
+  const ul = document.createElement('ul')
+
+  const liDevelopedBy = document.createElement('li')
+  liDevelopedBy.textContent = `Desenvolvido por ${sanitize(developedBy)}`
+
+  if(createdAt) {
+    const liDate = document.createElement('li')
+    liDate.textContent = `Adicionado no banco em ${getFormattedDate(createdAt)}`
+    ul.append(liDate)
   }
+
+  const button = document.createElement('button')
+  button.textContent = 'Remover'
+  button.setAttribute('data-remove', id)
+  button.setAttribute('class', 'btn btn-danger btn-sm')
+
+  ul.append(liDevelopedBy)
+  liGame.append(h5, ul, button)
+  gamesList.append(liGame)
+}
+
+const renderGamesList = snapshot => {
+  if (snapshot.metadata.hasPendingWrites) {
+    return 
+  }
+
+  snapshot.docChanges().forEach(docChange => {
+    if (docChange.type === 'removed') {
+      const liGame = document.querySelector(`[data-id="${docChange.doc.id}"]`)
+      liGame.remove()
+      return
+    }
+
+    renderGame(docChange)
+  })
 }
 
 const to = promise => promise
@@ -51,8 +80,8 @@ const addGame = async e => {
   e.preventDefault()
 
   const [ error, doc ] = await to(addDoc(collectionGames, {
-    title : e.target.title.value,
-    developedBy : e.target.developer.value,
+    title : sanitize(e.target.title.value),
+    developedBy : sanitize(e.target.developer.value),
     createdAt : serverTimestamp()
   }))
   
